@@ -28,7 +28,7 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  deploy:
+  ci:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -84,6 +84,13 @@ jobs:
           exit-code: 0 # Don't fail the build on vulnerabilities, but report them.
           ignore-unfixed: true
           severity: CRITICAL
+
+  deploy-to-eks:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
