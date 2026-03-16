@@ -69,8 +69,7 @@ jobs:
 
       - name: Build and push image
         run: |
-          docker buildx build --platform linux/amd64,linux/arm64/v8 \
-            --tag ${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }} \
+          docker buildx build --platform linux/arm64 \
             --tag ${{ env.IMAGE_REPOSITORY }}:latest \
             --file ./services/hackathon-starter-backend/Dockerfile \
             --push \
