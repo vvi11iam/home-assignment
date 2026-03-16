@@ -28,7 +28,7 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  ci:
+  build-and-push:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -86,7 +86,7 @@ jobs:
           severity: CRITICAL
 
   deploy-to-eks:
-    needs: ci
+    needs: build-and-push
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
