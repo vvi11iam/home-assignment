@@ -77,8 +77,9 @@ jobs:
           tags: |
             ${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }}
             ${{ env.IMAGE_REPOSITORY }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
+          # cache-from: type=gha
+          # cache-to: type=gha,mode=max
 
       # - name: Run Trivy scan
       #   uses: aquasecurity/trivy-action@0.35.0
