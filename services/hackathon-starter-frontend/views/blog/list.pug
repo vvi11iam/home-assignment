@@ -1,0 +1,27 @@
+extends ../layout
+
+block content
+  h3 Blog Posts
+
+  form(action='/blog/new', method='GET', style='display: inline')
+    button.btn.btn-primary(type='submit')
+      i.far.fa-file-lines.fa-sm.iconpadding
+      | New Post
+
+  ul
+    each post in posts
+      hr
+      li
+        h1
+          a(href=`/blog/${post._id}/view`) #{ post.title }
+        .blog-content !{ post.preview }
+
+        small By #{post.author.email } on #{post.createdAt}
+
+      form(action=`/blog/${post._id}/edit`, method='GET', style='display: inline')
+        //- input(type="hidden", name="_csrf", value=_csrf)
+        button.btn.btn-secondary(type='submit') Edit
+
+      form(action=`/blog/${post._id}/delete`, method='POST', style='display: inline', onsubmit='return confirm("Delete this post? This cannot be undone.");')
+        input(type='hidden', name='_csrf', value=_csrf)
+        button.btn.btn-outline-danger(type='submit') Delete

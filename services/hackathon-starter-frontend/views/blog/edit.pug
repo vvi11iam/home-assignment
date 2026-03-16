@@ -1,0 +1,19 @@
+extends ../layout
+
+block content
+  h3 Edit Blog Post
+  form(action=`/blog/${post._id}`, method='POST')
+    input(type='hidden', name='_csrf', value=_csrf)
+
+    .form-group.row.mb-3
+      label.col-md-2.col-form-label.font-weight-bold(for='title') Title
+      .col-md-8
+        input#title.form-control(type='text', name='title', autocomplete='title', autofocus, value=post.title, required)
+    .form-group.row.mb-3
+      label.col-md-2.col-form-label.font-weight-bold(for='content') Content
+      .col-md-8
+        textarea#content.form-control(name='content', rows='7', autofocus=(!unknownUser).toString(), required)= post.content
+
+    button#submitBtn.col-md-2.btn.btn-primary(type='submit')
+      i.far.fa-floppy-disk.fa-sm.iconpadding
+      | Update Post

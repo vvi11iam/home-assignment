@@ -1,0 +1,34 @@
+
+services:
+  mongo:
+    image: mongo:latest
+    ports:
+      - '27017:27017'
+  backend:
+    # build: services/hackathon-starter-backend
+    image: vvi11iamng0/hackathon-starter-backend
+    ports:
+      - '8080:8080'
+    environment:
+      - PORT=8080
+      - BASE_URL=http://backend:8080
+      - MONGODB_URI=mongodb://mongo:27017/test
+    links:
+      - mongo
+    depends_on:
+      - mongo
+  frontend:
+    # build: services/hackathon-starter-frontend
+    image: vvi11iamng0/hackathon-starter-frontend
+    ports:
+      - '3000:3000'
+    environment:
+      - PORT=3000
+      - BASE_URL=http://localhost:3000
+      - BACKEND_URL=http://backend:8080
+      - MONGODB_URI=mongodb://mongo:27017/test
+    links:
+      - mongo
+      - backend
+    depends_on:
+      - backend

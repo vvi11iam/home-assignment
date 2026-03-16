@@ -1,0 +1,12 @@
+extends ../layout
+
+block content
+  form(action=`/blog/${_id}/edit`, method='GET', style='display: inline')
+    input(type='hidden', name='_csrf', value=_csrf)
+    button.btn.btn-secondary(type='submit') Edit
+
+  form(action=`/blog/${_id}/delete`, method='POST', style='display: inline', onsubmit='return confirm("Delete this post? This cannot be undone.");')
+    input(type='hidden', name='_csrf', value=_csrf)
+    button.btn.btn-outline-danger(type='submit') Delete
+  h1= title
+  .blog-content !{ content }

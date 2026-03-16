@@ -1,0 +1,12 @@
+# Environment-specific configuration
+# Lines are simple KEY: VALUE pairs (no nesting).
+
+# Docker Hub
+DOCKERHUB_USERNAME: "vvi11iamng0"
+DOCKERHUB_TOKEN: ""
+
+# Terraform
+TERRAFORM_VERSION: "1.14.3"
+
+# Kubernetes (minikube)
+K8S_VERSION: "1.35.0"

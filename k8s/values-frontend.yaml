@@ -1,0 +1,32 @@
+nameOverride: ""
+fullnameOverride: "frontend"
+
+replicaCount: 1
+
+image:
+  repository: vvi11iamng0/hackathon-starter-frontend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+env:
+  PORT: "3000"
+  # BASE_URL: "http://localhost:3000"
+  BACKEND_URL: "http://backend:8080"
+  MONGODB_URI: "mongodb://mongodb.db:27017/test"
+
+service:
+  port: 3000
+  targetPort: 3000
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: "kickstarter.local"
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources: {}

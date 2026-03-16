@@ -1,0 +1,31 @@
+nameOverride: ""
+fullnameOverride: "backend"
+
+replicaCount: 1
+
+image:
+  repository: vvi11iamng0/hackathon-starter-backend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+env:
+  PORT: "8080"
+  BASE_URL: "http://backend:8080"
+  MONGODB_URI: "mongodb://mongodb.db:27017/test"
+
+service:
+  port: 8080
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: ""
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources: {}
