@@ -32,12 +32,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 24.13.0
+          node-version: 24.x
           cache: npm
           cache-dependency-path: ./services/hackathon-starter-frontend/package-lock.json
 
@@ -47,8 +47,12 @@ jobs:
         env:
           HUSKY: 0
 
+      - name: Load test environment
+        run: grep -Ev '^\s*#|^\s*$' test/.env.test >> "$GITHUB_ENV"
+        working-directory: ./services/hackathon-starter-frontend
+
       - name: Run tests
-        run: npm test
+        run: npm run test
         working-directory: ./services/hackathon-starter-frontend
 
       - name: Set up Docker Buildx
