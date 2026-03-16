@@ -48,7 +48,8 @@ jobs:
           HUSKY: 0
 
       - name: Load test environment
-        run: grep -Ev '^\s*#|^\s*$' "$GITHUB_WORKSPACE/services/hackathon-starter-frontend/test/.env.test" >> "$GITHUB_ENV"
+        run: grep -Ev '^\s*#|^\s*$' test/.env.test >> "$GITHUB_ENV"
+        working-directory: ./services/hackathon-starter-frontend
 
       - name: Run lint check
         run: npm run lint-check
