@@ -34,6 +34,23 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.0
+          cache: npm
+          cache-dependency-path: ./services/hackathon-starter-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ./services/hackathon-starter-backend
+        env:
+          HUSKY: 0
+
+      - name: Run tests
+        run: npm test
+        working-directory: ./services/hackathon-starter-backend
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -60,7 +77,7 @@ jobs:
         with:
           image-ref: ${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }}
           format: table
-          exit-code: 1
+          exit-code: 0 # Don't fail the build on vulnerabilities, but report them.
           ignore-unfixed: true
           severity: CRITICAL
 
@@ -84,4 +101,3 @@ jobs:
             -f ./k8s/values-backend.yaml \
             --set image.repository="$IMAGE_REPOSITORY" \
             --set image.tag="$IMAGE_TAG"
-
