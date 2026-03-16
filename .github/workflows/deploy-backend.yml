@@ -68,7 +68,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push image
-        run:
+        run: |
           docker buildx build --platform linux/amd64,linux/arm64/v8 \
             --tag ${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }} \
             --tag ${{ env.IMAGE_REPOSITORY }}:latest \
