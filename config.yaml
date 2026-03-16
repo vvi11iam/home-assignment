@@ -9,4 +9,4 @@ DOCKERHUB_TOKEN: ""
 TERRAFORM_VERSION: "1.14.3"
 
 # Kubernetes (minikube)
-K8S_VERSION: "1.35.0"
+K8S_VERSION: "1.33.0"

@@ -5,11 +5,44 @@ log() {
   printf "[deploy] %s\n" "$1"
 }
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${CONFIG_FILE:-${ROOT_DIR}/config.yaml}"
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     log "Missing required command: $1"
     exit 1
   fi
+}
+
+load_config() {
+  if [[ -f "$CONFIG_FILE" ]]; then
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+      if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*:[[:space:]]*(.*)$ ]]; then
+        key="${BASH_REMATCH[1]}"
+        val="${BASH_REMATCH[2]}"
+        val="${val%\"}"; val="${val#\"}"
+        val="${val%\'}"; val="${val#\'}"
+        export "$key"="$val"
+      fi
+    done < "$CONFIG_FILE"
+  fi
+}
+
+load_config
+
+ensure_namespace() {
+  local namespace="$1"
+
+  if kubectl get namespace "$namespace" >/dev/null 2>&1; then
+    log "Namespace ${namespace} already exists."
+    return
+  fi
+
+  log "Creating namespace ${namespace}..."
+  kubectl create namespace "$namespace" >/dev/null
 }
 
 resolve_docker_compose() {
@@ -46,6 +79,7 @@ deploy_docker_compose() {
 
 deploy_minikube() {
   local hostname hosts_file os driver host_ip ingress_url ingress_port
+  local db_namespace app_namespace
 
   require_cmd helm
   require_cmd kubectl
@@ -57,6 +91,8 @@ deploy_minikube() {
 
   hostname="kickstarter.local"
   hosts_file="/etc/hosts"
+  db_namespace="db"
+  app_namespace="app"
   os="$(uname -s)"
   driver="$(
     minikube profile list -o json 2>/dev/null \
@@ -88,25 +124,25 @@ deploy_minikube() {
   fi
 
   log "Adding/updating Bitnami repo..."
-  helm repo add bitnami https://charts.bitnami.com/bitnami >/dev/null
+  helm repo add bitnami https://charts.bitnami.com/bitnami --force-update >/dev/null
   helm repo update >/dev/null
 
-  kubectl create namespace db
-  kubectl create namespace app
+  ensure_namespace "$db_namespace"
+  ensure_namespace "$app_namespace"
 
   log "Installing/upgrading MongoDB..."
-  helm upgrade --install mongodb bitnami/mongodb --namespace db --set auth.enabled=false
+  helm upgrade --install mongodb bitnami/mongodb --namespace "$db_namespace" --set auth.enabled=false
 
   log "Installing/upgrading backend..."
-  helm upgrade --install backend k8s/helm --namespace app -f k8s/values-backend.yaml
+  helm upgrade --install backend k8s/helm --namespace "$app_namespace" -f k8s/values-backend.yaml
 
   log "Installing/upgrading frontend..."
-  helm upgrade --install frontend k8s/helm --namespace app -f k8s/values-frontend.yaml
+  helm upgrade --install frontend k8s/helm --namespace "$app_namespace" -f k8s/values-frontend.yaml
 
   log "Waiting for frontend to be ready..."
   kubectl wait --for=condition=available deployment \
     -l app.kubernetes.io/instance=frontend \
-    --namespace app \
+    --namespace "$app_namespace" \
     --timeout=180s
 
   log "Deploy complete."
