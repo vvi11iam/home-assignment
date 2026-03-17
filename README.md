@@ -13,10 +13,15 @@ The implementation is centered on portability:
 
 ## Architecture
 
-Architecture diagrams:
+### Diagrams:
 
-- [Minikube deployment](./docs/diagrams/Minikube.png)
-- [EKS CI/CD deployment](./docs/diagrams/EKS.png)
+Minikube deployment:
+
+![Minikube deployment](./docs/diagrams/Minikube.png)
+
+EKS CI/CD deployment:
+
+![EKS CI/CD deployment](./docs/diagrams/EKS.png)
 
 ### Approach
 
