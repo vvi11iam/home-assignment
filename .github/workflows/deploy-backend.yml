@@ -59,7 +59,7 @@ jobs:
         uses: nhedger/setup-sops@v2
 
       - name: Install age
-        uses: alessiodionisi/setup-age-action@v1
+        uses: alessiodionisi/setup-age-action@@v1.4.0
 
       - name: Decrypt backend env file
         env:
