@@ -13,13 +13,14 @@ services:
       - PORT=8080
       - BASE_URL=http://backend:8080
       - MONGODB_URI=mongodb://mongo:27017/test
+
     links:
       - mongo
     depends_on:
       - mongo
   frontend:
     # build: services/hackathon-starter-frontend
-    image: vvi11iamng0/hackathon-starter-frontend
+    image: vvi11iamng0/hackathon-starter-frontend:latest
     ports:
       - '3000:3000'
     environment:

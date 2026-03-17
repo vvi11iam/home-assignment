@@ -55,21 +55,21 @@ jobs:
         run: npm run test
         working-directory: ./services/hackathon-starter-frontend
 
-      - name: Install sops
-        uses: nhedger/setup-sops@v2
+      # - name: Install sops
+      #   uses: nhedger/setup-sops@v2
 
-      - name: Install age
-        uses: alessiodionisi/setup-age-action@v1.4.0
+      # - name: Install age
+      #   uses: alessiodionisi/setup-age-action@v1.4.0
 
-      - name: Decrypt frontend env file
-        env:
-          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
-        run: |
-          sops decrypt \
-            --input-type dotenv \
-            --output-type dotenv \
-            services/hackathon-starter-frontend/.env.example.enc \
-            > services/hackathon-starter-frontend/.env.example
+      # - name: Decrypt frontend env file
+      #   env:
+      #     SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+      #   run: |
+      #     sops decrypt \
+      #       --input-type dotenv \
+      #       --output-type dotenv \
+      #       services/hackathon-starter-frontend/.env.example.enc \
+      #       > services/hackathon-starter-frontend/.env.example
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
