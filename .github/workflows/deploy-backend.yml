@@ -34,29 +34,45 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      # - name: Set up Node.js
-      #   uses: actions/setup-node@v6
-      #   with:
-      #     node-version: 24.x
-          # cache: npm
-          # cache-dependency-path: ./services/hackathon-starter-backend/package-lock.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: ./services/hackathon-starter-backend/package-lock.json
 
-      # - name: Install dependencies
-      #   run: npm ci
-      #   working-directory: ./services/hackathon-starter-backend
-      #   env:
-      #     HUSKY: 0
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ./services/hackathon-starter-backend
+        env:
+          HUSKY: 0
 
-      # - name: Run lint check
-      #   run: npm run lint-check
-      #   working-directory: ./services/hackathon-starter-backend
+      - name: Run lint check
+        run: npm run lint-check
+        working-directory: ./services/hackathon-starter-backend
 
-      # - name: Run tests
-      #   run: npm run test
-      #   working-directory: ./services/hackathon-starter-backend
+      - name: Run tests
+        run: npm run test
+        working-directory: ./services/hackathon-starter-backend
 
-      # - name: Set up Docker Buildx
-      #   uses: docker/setup-buildx-action@v3
+      - name: Install sops
+        uses: nhedger/setup-sops@v2
+
+      - name: Install age
+        uses: alessiodionisi/setup-age-action@v1
+
+      - name: Decrypt backend env file
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          sops decrypt \
+            --input-type dotenv \
+            --output-type dotenv \
+            services/hackathon-starter-backend/.env.example.enc \
+            > services/hackathon-starter-backend/.env.example
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -68,25 +84,18 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push image
-        run: |
-          docker buildx build --platform linux/arm64 \
-            --tag ${{ env.IMAGE_REPOSITORY }}:latest \
-            --file ./services/hackathon-starter-backend/Dockerfile \
-            --push \
-            --no-cache \
-            ./services/hackathon-starter-backend
-        # uses: docker/build-push-action@v6
-        # with:
-        #   context: ./services/hackathon-starter-backend
-        #   file: ./services/hackathon-starter-backend/Dockerfile
-        #   platforms: linux/amd64,linux/arm64/v8
-        #   push: true
-        #   tags: |
-        #     ${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }}
-        #     ${{ env.IMAGE_REPOSITORY }}:latest
-        #   no-cache: true
-          # cache-from: type=gha
-          # cache-to: type=gha,mode=max
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/hackathon-starter-backend
+          file: ./services/hackathon-starter-backend/Dockerfile
+          platforms: linux/amd64,linux/arm64/v8
+          push: true
+          tags: |
+            ${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_REPOSITORY }}:latest
+          no-cache: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       # - name: Run Trivy scan
       #   uses: aquasecurity/trivy-action@0.35.0

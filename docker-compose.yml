@@ -6,7 +6,7 @@ services:
       - '27017:27017'
   backend:
     # build: services/hackathon-starter-backend
-    image: vvi11iamng0/hackathon-starter-backend@sha256:4aea6044185a82dabce14d90244e635bdf3d47315fe4aa6b495d058a96340999
+    image: vvi11iamng0/hackathon-starter-backend:latest
     ports:
       - '8080:8080'
     environment:
