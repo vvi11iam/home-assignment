@@ -1,0 +1,12 @@
+# =============================================================================
+# INFRASTRUCTURE & DEVOPS
+# =============================================================================
+
+# Terraform - Infrastructure as Code
+**/*.tfstate
+**/*.tfstate.backup
+**/*.tfstate.lock.info
+**/*.tfplan
+**/*.tfvars
+**/.terraform/
+**/.terraform.lock.hcl

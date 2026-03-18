@@ -17,15 +17,18 @@ env:
 service:
   port: 3000
   targetPort: 3000
+  type: NodePort
 
 ingress:
   enabled: true
-  className: "nginx"
+  className: "alb"
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/tags: Environment=dev,Team=test
   hosts:
     - paths:
         - path: /
           pathType: Prefix
-      host: "kickstarter.local"
   tls: []
 
 resources: {}
