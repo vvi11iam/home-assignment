@@ -236,7 +236,8 @@ helm upgrade --install aws-load-balancer-controller \
   --set clusterName="${CLUSTER_NAME}" \
   --set serviceAccount.name=aws-load-balancer-controller \
   --set-string serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn=arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME} \
-  --set region="${AWS_REGION}"
+  --set region="${AWS_REGION}" \
+  --set vpcId=$(aws eks describe-cluster --region "$AWS_REGION" --name "$CLUSTER_NAME" --query 'cluster.resourcesVpcConfig.vpcId' --output text)
 ```
 
 ## Destroy
