@@ -120,6 +120,6 @@ jobs:
           helm upgrade --install "$HELM_RELEASE_NAME" ./k8s/helm \
             --namespace "$K8S_NAMESPACE" \
             --create-namespace \
-            -f ./k8s/values-frontend.yaml \
+            -f ./k8s/values-frontend-eks.yaml \
             --set image.repository="$IMAGE_REPOSITORY" \
             --set image.tag="$IMAGE_TAG"

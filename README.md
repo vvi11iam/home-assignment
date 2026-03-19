@@ -8,6 +8,7 @@ The implementation is centered on portability:
 - `services/hackathon-starter-backend` exposes the companion service on port `8080`.
 - MongoDB provides application persistence and session storage.
 - `docker-compose.yml` provides a fast local container runtime.
+- `terraform/` provisions the AWS network and EKS foundation used by the cloud deployment path.
 - `k8s/helm` is a reusable Helm chart parameterized by per-service values files.
 - `.github/workflows` builds, tests, pushes, and deploys each service independently to EKS.
 
@@ -41,6 +42,8 @@ The main design choice was to keep the delivery path consistent across environme
   - `docker-compose`: starts MongoDB, backend, and frontend locally.
   - `minikube`: starts a cluster, enables ingress, installs MongoDB from Bitnami, and deploys both services through Helm.
 - `cleanup.sh` tears down either the Compose stack or the Minikube cluster.
+- `terraform/vpc` provisions the base AWS networking layer.
+- `terraform/eks-karpenter` provisions the EKS cluster, bootstrap managed node group, and Karpenter IAM resources.
 - `k8s/helm/templates` defines a generic Deployment, Service, and optional Ingress.
 - `k8s/values-backend.yaml` and `k8s/values-frontend.yaml` inject image names, ports, and service-specific environment variables.
 - `.github/workflows/deploy-backend.yml` and `.github/workflows/deploy-frontend.yml` run `npm ci`, lint, tests, container build/push, a Trivy scan, and `helm upgrade --install` against EKS.
@@ -56,6 +59,9 @@ The main design choice was to keep the delivery path consistent across environme
 ├── deploy.sh
 ├── cleanup.sh
 ├── docs/diagrams/
+├── terraform/
+│   ├── vpc/
+│   └── eks-karpenter/
 ├── k8s/
 │   ├── helm/
 │   ├── values-backend.yaml
@@ -75,6 +81,7 @@ The main design choice was to keep the delivery path consistent across environme
 - Node.js `24.13.0+` if you want to run the apps outside containers
 - Access to Docker Hub for image publishing
 - Access to an AWS account and an existing EKS cluster for the CI/CD deployment path
+- Terraform `>= 1.5.7` if you want to provision the AWS infrastructure from this repository
 
 Windows is not directly handled by the scripts. The practical option is WSL2 with Docker and Kubernetes tooling installed inside Linux.
 
@@ -179,6 +186,8 @@ Expected access pattern:
 
 Pushes to `main` trigger per-service workflows when the changed files affect that service, the shared chart, or the corresponding values file.
 
+The workflows deploy application releases into an existing EKS cluster. They do not provision AWS infrastructure themselves. That infrastructure can be created from the Terraform modules in `terraform/`.
+
 Repository configuration required:
 
 - GitHub secrets:
@@ -203,9 +212,51 @@ Workflow behavior:
 8. Update kubeconfig for EKS.
 9. Run `helm upgrade --install` with the new image tag.
 
+#### 5. Provision AWS infrastructure with Terraform
+
+The repository contains two Terraform stacks:
+
+- `terraform/vpc`: creates the shared VPC, public subnets, private subnets, and intra subnets in `ap-southeast-1`
+- `terraform/eks-karpenter`: creates the EKS cluster, a bootstrap managed node group, and the Karpenter IAM resources
+
+Current assumptions baked into the Terraform code:
+
+- remote state is stored in S3 bucket `home-assignment-terraform-backend`
+- the region is `ap-southeast-1`
+- `terraform/eks-karpenter` reads VPC outputs from the `terraform/vpc` remote state
+- the EKS Kubernetes version inside Terraform is currently set in the module itself and is separate from the Minikube `K8S_VERSION` in `config.yaml`
+
+Typical apply sequence:
+
+```bash
+cd terraform/vpc
+terraform init
+terraform plan
+terraform apply
+```
+
+```bash
+cd terraform/eks-karpenter
+terraform init
+terraform plan
+terraform apply
+```
+
+After cluster creation:
+
+```bash
+aws eks --region ap-southeast-1 update-kubeconfig --name ex-eks-karpenter
+```
+
+Notes:
+
+- The EKS Terraform stack creates IAM resources for Karpenter, but it does not install the Karpenter Helm chart.
+- The EKS Terraform stack also does not install the AWS Load Balancer Controller or the EBS CSI driver.
+- Detailed cluster bootstrap instructions live in `terraform/eks-karpenter/README.md`.
+
 ## Configuration
 
-Configuration exists at three layers: workstation bootstrap, container/runtime environment, and Kubernetes release settings.
+Configuration exists at four layers: workstation bootstrap, Terraform infrastructure, container/runtime environment, and Kubernetes release settings.
 
 ### Root `config.yaml`
 
@@ -217,6 +268,21 @@ This file controls the helper scripts.
 | `DOCKERHUB_TOKEN` | `build.sh` | Enables non-interactive Docker Hub login. If empty, login becomes interactive. |
 | `TERRAFORM_VERSION` | `setup.sh` | Version installed on Linux workstations. |
 | `K8S_VERSION` | `deploy.sh` | Kubernetes version passed to `minikube start`. |
+
+### Terraform configuration
+
+Terraform-specific configuration currently lives in the module directories rather than in `config.yaml`.
+
+Important behavior:
+
+| Location | Effect |
+| --- | --- |
+| `terraform/vpc/versions.tf` | Pins Terraform/provider requirements and configures S3 remote state at key `vpc.tfstate`. |
+| `terraform/vpc/main.tf` | Creates the base VPC in `ap-southeast-1`, including public, private, and intra subnets plus NAT. |
+| `terraform/eks-karpenter/versions.tf` | Pins Terraform/provider requirements and configures S3 remote state at key `eks-karpenter.tfstate`. |
+| `terraform/eks-karpenter/main.tf` | Creates the EKS control plane, bootstrap node group, and Karpenter IAM resources. |
+| `terraform/eks-karpenter/main.tf` `kubernetes_version` | Controls the EKS cluster version for AWS. This is separate from local Minikube versioning. |
+| `terraform/eks-karpenter/data.tf` | Reads the VPC outputs from remote state, so the VPC stack must exist first. |
 
 ### Runtime environment variables
 
