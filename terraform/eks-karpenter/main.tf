@@ -38,6 +38,12 @@ module "eks" {
 
   addons = {
     coredns = {}
+    aws-ebs-csi-driver = {
+      pod_identity_association = [{
+        role_arn        = aws_iam_role.ebs_csi_driver.arn
+        service_account = "ebs-csi-controller-sa"
+      }]
+    }
     eks-pod-identity-agent = {
       before_compute = true
     }

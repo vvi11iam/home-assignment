@@ -5,12 +5,11 @@ data "tls_certificate" "github_actions" {
 }
 
 locals {
-  cluster_oidc_host = replace(module.eks.cluster_oidc_issuer_url, "https://", "")
+  cluster_oidc_host        = replace(module.eks.cluster_oidc_issuer_url, "https://", "")
   github_actions_oidc_host = "token.actions.githubusercontent.com"
 
-  ebs_csi_controller_service_account = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
-  aws_load_balancer_controller_sa    = "system:serviceaccount:kube-system:aws-load-balancer-controller"
-  github_actions_sub                 = "repo:vvi11iam/home-assignment:*"
+  aws_load_balancer_controller_sa = "system:serviceaccount:kube-system:aws-load-balancer-controller"
+  github_actions_sub              = "repo:vvi11iam/home-assignment:*"
 }
 
 ################################################################################
@@ -19,24 +18,27 @@ locals {
 
 data "aws_iam_policy_document" "ebs_csi_driver_assume_role" {
   statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect = "Allow"
+    actions = [
+      "sts:AssumeRole",
+      "sts:TagSession",
+    ]
 
     principals {
-      type        = "Federated"
-      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.cluster_oidc_host}"]
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
     }
 
     condition {
       test     = "StringEquals"
-      variable = "${local.cluster_oidc_host}:aud"
-      values   = ["sts.amazonaws.com"]
+      variable = "aws:RequestTag/kubernetes-namespace"
+      values   = ["kube-system"]
     }
 
     condition {
       test     = "StringEquals"
-      variable = "${local.cluster_oidc_host}:sub"
-      values   = [local.ebs_csi_controller_service_account]
+      variable = "aws:RequestTag/kubernetes-service-account"
+      values   = ["ebs-csi-controller-sa"]
     }
   }
 }

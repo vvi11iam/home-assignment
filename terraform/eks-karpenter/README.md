@@ -4,10 +4,11 @@ This directory provisions an Amazon EKS cluster in `ap-southeast-1` with:
 
 - an EKS managed node group used as bootstrap capacity for Karpenter
 - the Karpenter IAM resources required for node provisioning
-- Terraform-managed IRSA roles for the AWS EBS CSI Driver and AWS Load Balancer Controller
+- the Amazon EKS add-on `aws-ebs-csi-driver`
+- Terraform-managed IAM roles for the AWS EBS CSI Driver and AWS Load Balancer Controller
 - a GitHub Actions OIDC identity provider and deployment role
 - an EKS access entry that grants the GitHub Actions role `AmazonEKSEditPolicy` in namespace `app`
-- no in-Terraform Helm releases for Karpenter, EBS CSI, or the AWS Load Balancer Controller
+- no in-Terraform Helm releases for Karpenter or the AWS Load Balancer Controller
 
 The cluster name is derived from the directory name:
 
@@ -28,7 +29,8 @@ ex-eks-karpenter
 - EKS cluster version `1.35`
 - Bootstrap managed node group `karpenter`
 - Karpenter IAM resources, including the node IAM role named `ex-eks-karpenter`
-- IRSA role `AmazonEKS_EBS_CSI_DriverRole`
+- EKS add-on `aws-ebs-csi-driver`
+- Pod Identity role `AmazonEKS_EBS_CSI_DriverRole`
 - IRSA role `AmazonEKS_LoadBalancer_ControllerRole`
 - custom policy `AWSLoadBalancerControllerIAMPolicy`
 - GitHub OIDC provider for `token.actions.githubusercontent.com`
@@ -113,41 +115,51 @@ kubectl get nodes -L karpenter.sh/registered
 kubectl get pods -A -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeName
 ```
 
-## Install AWS EBS CSI Driver With Helm and IRSA
+## AWS EBS CSI Driver
 
-Use either the EKS add-on or the Helm chart, not both. If `aws-ebs-csi-driver` was previously installed as an EKS add-on, remove the add-on and its leftover resources before installing the Helm chart.
+Terraform now installs `aws-ebs-csi-driver` as an Amazon EKS add-on in `module.eks`.
 
-Terraform creates the EBS CSI IRSA role. Retrieve the ARN from outputs:
+The add-on uses the Terraform-managed role `AmazonEKS_EBS_CSI_DriverRole` through EKS Pod Identity. No separate Helm install is required for this cluster.
 
-```bash
-export AWS_REGION=ap-southeast-1
-export ROLE_ARN=$(terraform output -raw ebs_csi_driver_role_arn)
-```
-
-Install the Helm chart:
+Verify the add-on after `terraform apply`:
 
 ```bash
-helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
-helm repo update
-
-helm upgrade --install aws-ebs-csi-driver \
-  aws-ebs-csi-driver/aws-ebs-csi-driver \
-  -n kube-system \
-  --create-namespace \
-  --set controller.region="${AWS_REGION}" \
-  --set-string controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn="${ROLE_ARN}" \
-  --set defaultStorageClass.enabled=true
+aws eks describe-addon \
+  --region ap-southeast-1 \
+  --cluster-name ex-eks-karpenter \
+  --addon-name aws-ebs-csi-driver
 ```
 
-Verify the service account annotation:
+Create a default `StorageClass` for dynamic volume provisioning:
 
 ```bash
-kubectl get sa ebs-csi-controller-sa -n kube-system -o yaml
+cat <<EOF | kubectl apply -f -
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: gp3
+  fsType: ext4
+EOF
 ```
 
-## Install AWS Load Balancer Controller With IRSA
+Verify the default storage class:
 
-Terraform creates the IAM role and policy. Retrieve the role ARN from outputs:
+```bash
+kubectl get storageclass
+```
+
+## AWS Load Balancer Controller
+
+AWS Load Balancer Controller is still self-managed in this stack. Terraform creates the IAM role and policy, but you still install the controller separately with Helm.
+
+Retrieve the role ARN from outputs:
 
 ```bash
 export AWS_REGION=ap-southeast-1
@@ -200,8 +212,8 @@ terraform destroy
 
 - If the bootstrap managed node group is stuck in `CREATING`, inspect the EKS node group health first:
   `aws eks describe-nodegroup --region ap-southeast-1 --cluster-name ex-eks-karpenter --nodegroup-name karpenter`
-- If Helm install for EBS CSI fails because resources are labeled `managed-by: EKS`, remove the existing EKS add-on resources before retrying the Helm install.
-- If the EBS CSI controller reports `Request ARN is invalid`, check the `eks.amazonaws.com/role-arn` annotation for a malformed value and verify the `zsh` variable expansion used when applying the Helm chart.
+- If you already installed EBS CSI with Helm or another add-on configuration, clean it up before applying this Terraform change so the `aws-ebs-csi-driver` add-on can be created cleanly.
+- AWS Load Balancer Controller is not managed by `module.eks.addons` in this stack. Continue to install it separately with Helm.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
