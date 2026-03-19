@@ -4,6 +4,9 @@ This directory provisions an Amazon EKS cluster in `ap-southeast-1` with:
 
 - an EKS managed node group used as bootstrap capacity for Karpenter
 - the Karpenter IAM resources required for node provisioning
+- Terraform-managed IRSA roles for the AWS EBS CSI Driver and AWS Load Balancer Controller
+- a GitHub Actions OIDC identity provider and deployment role
+- an EKS access entry that grants the GitHub Actions role `AmazonEKSEditPolicy` in namespace `app`
 - no in-Terraform Helm releases for Karpenter, EBS CSI, or the AWS Load Balancer Controller
 
 The cluster name is derived from the directory name:
@@ -25,6 +28,12 @@ ex-eks-karpenter
 - EKS cluster version `1.35`
 - Bootstrap managed node group `karpenter`
 - Karpenter IAM resources, including the node IAM role named `ex-eks-karpenter`
+- IRSA role `AmazonEKS_EBS_CSI_DriverRole`
+- IRSA role `AmazonEKS_LoadBalancer_ControllerRole`
+- custom policy `AWSLoadBalancerControllerIAMPolicy`
+- GitHub OIDC provider for `token.actions.githubusercontent.com`
+- GitHub Actions role `EKSDeployment`
+- EKS access entry for user `github-actions`, scoped to namespace `app`
 
 The bootstrap node group is intentionally separate from Karpenter-managed capacity. It exists so the Karpenter controller and core EKS system pods have somewhere to run before Karpenter starts provisioning nodes.
 
@@ -42,6 +51,12 @@ The bootstrap node group is intentionally separate from Karpenter-managed capaci
 terraform init
 terraform plan
 terraform apply
+```
+
+Useful outputs after apply:
+
+```bash
+terraform output
 ```
 
 ## Configure kubectl
@@ -81,13 +96,13 @@ helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
 Apply the sample `EC2NodeClass` and `NodePool`:
 
 ```bash
-kubectl apply -f karpenter.yaml
+kubectl apply -f files/karpenter.yaml
 ```
 
 Deploy a test workload that should trigger Karpenter capacity:
 
 ```bash
-kubectl apply -f inflate.yaml
+kubectl apply -f files/inflate.yaml
 ```
 
 Watch Karpenter:
@@ -102,48 +117,11 @@ kubectl get pods -A -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeName
 
 Use either the EKS add-on or the Helm chart, not both. If `aws-ebs-csi-driver` was previously installed as an EKS add-on, remove the add-on and its leftover resources before installing the Helm chart.
 
-Create the IRSA role for the controller service account:
+Terraform creates the EBS CSI IRSA role. Retrieve the ARN from outputs:
 
 ```bash
 export AWS_REGION=ap-southeast-1
-export CLUSTER_NAME=ex-eks-karpenter
-export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-export ROLE_NAME=AmazonEKS_EBS_CSI_DriverRole
-export OIDC_ISSUER=$(aws eks describe-cluster --region "${AWS_REGION}" --name "${CLUSTER_NAME}" --query 'cluster.identity.oidc.issuer' --output text)
-export OIDC_HOST=${OIDC_ISSUER#https://}
-```
-
-```bash
-tee aws-ebs-csi-driver-trust-policy.json <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Federated": "arn:aws:iam::${ACCOUNT_ID}:oidc-provider/${OIDC_HOST}"
-      },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "${OIDC_HOST}:aud": "sts.amazonaws.com",
-          "${OIDC_HOST}:sub": "system:serviceaccount:kube-system:ebs-csi-controller-sa"
-        }
-      }
-    }
-  ]
-}
-EOF
-```
-
-```bash
-aws iam create-role \
-  --role-name "${ROLE_NAME}" \
-  --assume-role-policy-document file://aws-ebs-csi-driver-trust-policy.json
-
-aws iam attach-role-policy \
-  --role-name "${ROLE_NAME}" \
-  --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+export ROLE_ARN=$(terraform output -raw ebs_csi_driver_role_arn)
 ```
 
 Install the Helm chart:
@@ -157,11 +135,9 @@ helm upgrade --install aws-ebs-csi-driver \
   -n kube-system \
   --create-namespace \
   --set controller.region="${AWS_REGION}" \
-  --set-string controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn=arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME} \
+  --set-string controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn="${ROLE_ARN}" \
   --set defaultStorageClass.enabled=true
 ```
-
-Important for `zsh`: keep the variable braces in the ARN. Without braces, `zsh` can treat `:role` as a modifier and produce an invalid ARN.
 
 Verify the service account annotation:
 
@@ -171,56 +147,12 @@ kubectl get sa ebs-csi-controller-sa -n kube-system -o yaml
 
 ## Install AWS Load Balancer Controller With IRSA
 
-Create the IAM role:
+Terraform creates the IAM role and policy. Retrieve the role ARN from outputs:
 
 ```bash
 export AWS_REGION=ap-southeast-1
 export CLUSTER_NAME=ex-eks-karpenter
-export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-export ROLE_NAME=AmazonEKS_LoadBalancer_ControllerRole
-export OIDC_ISSUER=$(aws eks describe-cluster --region "${AWS_REGION}" --name "${CLUSTER_NAME}" --query 'cluster.identity.oidc.issuer' --output text)
-export OIDC_HOST=${OIDC_ISSUER#https://}
-```
-
-```bash
-tee aws-load-balancer-controller-trust-policy.json <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Federated": "arn:aws:iam::${ACCOUNT_ID}:oidc-provider/${OIDC_HOST}"
-      },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "${OIDC_HOST}:aud": "sts.amazonaws.com",
-          "${OIDC_HOST}:sub": "system:serviceaccount:kube-system:aws-load-balancer-controller"
-        }
-      }
-    }
-  ]
-}
-EOF
-```
-
-Download the recommended controller policy and attach it:
-
-```bash
-curl -o iam-policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
-
-aws iam create-policy \
-  --policy-name AWSLoadBalancerControllerIAMPolicy \
-  --policy-document file://iam-policy.json
-
-aws iam create-role \
-  --role-name "${ROLE_NAME}" \
-  --assume-role-policy-document file://aws-load-balancer-controller-trust-policy.json
-
-aws iam attach-role-policy \
-  --role-name "${ROLE_NAME}" \
-  --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/AWSLoadBalancerControllerIAMPolicy
+export ROLE_ARN=$(terraform output -raw aws_load_balancer_controller_role_arn)
 ```
 
 Install the controller:
@@ -235,10 +167,25 @@ helm upgrade --install aws-load-balancer-controller \
   --create-namespace \
   --set clusterName="${CLUSTER_NAME}" \
   --set serviceAccount.name=aws-load-balancer-controller \
-  --set-string serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn=arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME} \
+  --set-string serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn="${ROLE_ARN}" \
   --set region="${AWS_REGION}" \
   --set vpcId=$(aws eks describe-cluster --region "$AWS_REGION" --name "$CLUSTER_NAME" --query 'cluster.resourcesVpcConfig.vpcId' --output text)
 ```
+
+## GitHub Actions Access
+
+Terraform creates a GitHub OIDC provider and the role `EKSDeployment`.
+
+- Trust entity:
+  `token.actions.githubusercontent.com`
+- Trusted subject:
+  `repo:vvi11iam/home-assignment:*`
+- IAM policy:
+  `eks:DescribeCluster`
+- EKS access:
+  `AmazonEKSEditPolicy` for namespace `app` only, mapped as user `github-actions`
+
+Your GitHub Actions workflow can assume the role ARN for `EKSDeployment` and then use `aws eks update-kubeconfig` or `kubectl` against the cluster, but its EKS edit rights are intentionally limited to namespace `app`.
 
 ## Destroy
 
@@ -289,5 +236,12 @@ No inputs.
 
 ## Outputs
 
-No outputs.
+This stack currently returns:
+
+- `cluster_name`
+- `cluster_endpoint`
+- `update_kubeconfig_command`
+- `ebs_csi_driver_role_arn`
+- `aws_load_balancer_controller_role_arn`
+- `aws_load_balancer_controller_policy_arn`
 <!-- END_TF_DOCS -->
