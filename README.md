@@ -14,7 +14,7 @@ The implementation is centered on portability:
 
 ## Architecture
 
-### Diagrams:
+### Diagrams
 
 Minikube deployment:
 
@@ -28,11 +28,14 @@ EKS CI/CD deployment:
 
 The main design choice was to keep the delivery path consistent across environments:
 
-1. Package each app as its own container image.
-2. Run both services against the same MongoDB dependency.
-3. Use Docker Compose for local orchestration with minimal ceremony.
-4. Use one generic Helm chart plus `values-backend.yaml` and `values-frontend.yaml` to avoid duplicating Kubernetes manifests.
-5. Use separate GitHub Actions workflows so backend and frontend can be validated and released independently.
+1. Extend the upstream Hackathon Starter codebase with an API-server split so the project can demonstrate a multi-tier architecture with separate frontend, backend, and database layers.
+2. Keep the frontend service connected to MongoDB for now because the application was not fully broken down within the available time.
+3. Route the newly created Blog Post feature through the backend service as the first extracted domain flow.
+4. Leave some existing behavior in the frontend service temporarily so the repository shows the direction of the decomposition without claiming a fully completed separation.
+5. Package each app as its own container image.
+6. Use Docker Compose for local orchestration with minimal ceremony.
+7. Use one generic Helm chart plus `values-backend.yaml` and `values-frontend.yaml` to avoid duplicating Kubernetes manifests.
+8. Use separate GitHub Actions workflows so backend and frontend can be validated and released independently to EKS.
 
 ### Implementation summary
 
