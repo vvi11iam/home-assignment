@@ -19,22 +19,16 @@ provider "helm" {
   }
 }
 
-provider "kubernetes" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-  token                  = data.aws_eks_cluster_auth.this.token
-}
-
 resource "helm_release" "karpenter" {
   name             = "karpenter"
   namespace        = "kube-system"
   create_namespace = false
 
-  repository = "oci://public.ecr.aws/karpenter"
+  repository          = "oci://public.ecr.aws/karpenter"
   # repository_username = data.aws_ecrpublic_authorization_token.karpenter.user_name
   # repository_password = data.aws_ecrpublic_authorization_token.karpenter.password
-  chart   = "karpenter"
-  version = "1.9.0"
+  chart               = "karpenter"
+  version             = "1.9.0"
 
   values = [
     yamlencode({
