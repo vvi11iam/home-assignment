@@ -8,7 +8,8 @@ This directory provisions an Amazon EKS cluster in `ap-southeast-1` with:
 - Terraform-managed IAM roles for the AWS EBS CSI Driver and AWS Load Balancer Controller
 - a GitHub Actions OIDC identity provider and deployment role
 - an EKS access entry that grants the GitHub Actions role `AmazonEKSEditPolicy` in namespace `app`
-- no in-Terraform Helm releases for Karpenter or the AWS Load Balancer Controller
+- Terraform-managed Helm releases for Karpenter and the AWS Load Balancer Controller
+- Terraform-managed Kubernetes manifests for `files/karpenter.yaml` and `files/storageclass.yaml`
 
 The cluster name is derived from the directory name:
 
@@ -33,6 +34,9 @@ ex-eks-karpenter
 - Pod Identity role `AmazonEKS_EBS_CSI_DriverRole`
 - IRSA role `AmazonEKS_LoadBalancer_ControllerRole`
 - custom policy `AWSLoadBalancerControllerIAMPolicy`
+- Helm release `karpenter`
+- Helm release `aws-load-balancer-controller`
+- Kubernetes manifests for `EC2NodeClass`, `NodePool`, and the default EBS `StorageClass`
 - GitHub OIDC provider for `token.actions.githubusercontent.com`
 - GitHub Actions role `EKSDeployment`
 - EKS access entry for user `github-actions`, scoped to namespace `app`
@@ -74,32 +78,9 @@ kubectl get nodes -L karpenter.sh/controller
 kubectl get pods -A
 ```
 
-## Install Karpenter
+## Karpenter
 
-This Terraform configuration creates the IAM resources for Karpenter, but it does not install the Karpenter Helm chart. Install the chart separately after the cluster is reachable.
-
-```bash
-helm registry logout public.ecr.aws
-docker logout public.ecr.aws
-
-export CLUSTER_NAME="ex-eks-karpenter"
-export KARPENTER_NAMESPACE="kube-system"
-export KARPENTER_VERSION="1.9.0"
-
-helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
-  --version "${KARPENTER_VERSION}" \
-  --namespace "${KARPENTER_NAMESPACE}" \
-  --create-namespace \
-  --set "settings.clusterName=${CLUSTER_NAME}" \
-  --set "settings.interruptionQueue=${CLUSTER_NAME}" \
-  --wait
-```
-
-Apply the sample `EC2NodeClass` and `NodePool`:
-
-```bash
-kubectl apply -f files/karpenter.yaml
-```
+Terraform now installs the Karpenter Helm chart from `helm.tf` and applies `files/karpenter.yaml` from `manifests.tf`.
 
 Deploy a test workload that should trigger Karpenter capacity:
 
@@ -130,24 +111,7 @@ aws eks describe-addon \
   --addon-name aws-ebs-csi-driver
 ```
 
-Create a default `StorageClass` for dynamic volume provisioning:
-
-```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: gp3
-  annotations:
-    storageclass.kubernetes.io/is-default-class: "true"
-provisioner: ebs.csi.aws.com
-volumeBindingMode: WaitForFirstConsumer
-allowVolumeExpansion: true
-parameters:
-  type: gp3
-  fsType: ext4
-EOF
-```
+Terraform also applies the default `StorageClass` from `files/storageclass.yaml`.
 
 Verify the default storage class:
 
@@ -157,31 +121,13 @@ kubectl get storageclass
 
 ## AWS Load Balancer Controller
 
-AWS Load Balancer Controller is still self-managed in this stack. Terraform creates the IAM role and policy, but you still install the controller separately with Helm.
+Terraform now installs AWS Load Balancer Controller from `helm.tf`. Terraform still provisions the IAM role and policy, and the Helm release uses that role annotation for the controller service account.
 
-Retrieve the role ARN from outputs:
-
-```bash
-export AWS_REGION=ap-southeast-1
-export CLUSTER_NAME=ex-eks-karpenter
-export ROLE_ARN=$(terraform output -raw aws_load_balancer_controller_role_arn)
-```
-
-Install the controller:
+Verify the release after `terraform apply`:
 
 ```bash
-helm repo add eks https://aws.github.io/eks-charts
-helm repo update
-
-helm upgrade --install aws-load-balancer-controller \
-  eks/aws-load-balancer-controller \
-  -n kube-system \
-  --create-namespace \
-  --set clusterName="${CLUSTER_NAME}" \
-  --set serviceAccount.name=aws-load-balancer-controller \
-  --set-string serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn="${ROLE_ARN}" \
-  --set region="${AWS_REGION}" \
-  --set vpcId=$(aws eks describe-cluster --region "$AWS_REGION" --name "$CLUSTER_NAME" --query 'cluster.resourcesVpcConfig.vpcId' --output text)
+helm list -n kube-system
+kubectl get deployment aws-load-balancer-controller -n kube-system
 ```
 
 ## GitHub Actions Access
@@ -213,7 +159,7 @@ terraform destroy
 - If the bootstrap managed node group is stuck in `CREATING`, inspect the EKS node group health first:
   `aws eks describe-nodegroup --region ap-southeast-1 --cluster-name ex-eks-karpenter --nodegroup-name karpenter`
 - If you already installed EBS CSI with Helm or another add-on configuration, clean it up before applying this Terraform change so the `aws-ebs-csi-driver` add-on can be created cleanly.
-- AWS Load Balancer Controller is not managed by `module.eks.addons` in this stack. Continue to install it separately with Helm.
+- Karpenter and AWS Load Balancer Controller are now managed by Terraform Helm releases in `helm.tf`. If you already installed either one manually, remove the old release before applying this change.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
